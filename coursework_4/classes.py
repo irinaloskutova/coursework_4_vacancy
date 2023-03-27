@@ -19,7 +19,7 @@ class Engine(ABC):
 
 class HH(Engine):
     """Возвращает 1000 вакансий с сайта HeadHunter"""
-    def __init__(self, data):
+    def __init__(self, data: str):
         """Инициализирует класс где data - название по которому будет происходить поиск"""
         self.data = data
         self.request = self.get_request()
@@ -37,8 +37,9 @@ class HH(Engine):
             vacancies.extend(requests.get('https://api.hh.ru/vacancies', params=params).json()["items"])
         return vacancies
 
+
 class Superjob(Engine):
-    def __init__(self, data):
+    def __init__(self, data: str):
         """Инициализирует класс где data - название по которому будет происходить поиск"""
         self.data = data
         self.request = self.get_request()
@@ -51,6 +52,7 @@ class Superjob(Engine):
         response = requests.get(url, headers=my_auth_data, params=params)
         vacancies = response.json()['objects']
         return vacancies
+
 
 class HHVacancy(HH):
     """ HeadHunter Vacancy """
@@ -80,6 +82,7 @@ class HHVacancy(HH):
         with open('hhvacancy.json', 'w') as f:
             json.dump(self.get_vacancy, f, indent=2)
 
+
 class SJVacancy(Superjob):
     """ SuperJob Vacancy """
     @property
@@ -88,7 +91,6 @@ class SJVacancy(Superjob):
         город, зарплатная вилка, описание требований и url вакансии"""
         list_vacancy = []
         for i in range(len(self.request)):
-            # print(self.request[i]['profession'])
             info = {
                 'source': 'SuperJob',
                 'name': self.request[i]['profession'],
@@ -109,36 +111,38 @@ class SJVacancy(Superjob):
         with open('sjvacancy.json', 'w') as f:
             json.dump(self.get_vacancy, f, indent=2)
 
-class Vacancy:
-    __slots__ = ('name_vacancy', 'salary', 'requirement', 'url_vacancy')
 
-    def __init__(self, name_vacancy=None, url_vacancy=None, requirement=None, salary=0):
-        self.name_vacancy = name_vacancy.strip(' !@#`*&^?/)(')
+class Vacancy(HHVacancy, SJVacancy): #я предполагала, что в этот класс надо собрать все вакансии от обоих сайтов
+    __slots__ = ("source", "name_vacancy", "city", "salary", "requirement", "url_vacancy")
+
+    def __init__(self, name_vacancy=None, city=None, url_vacancy=None, requirement=None, salary=0):
+        super().__init__(data)
+        self.name_vacancy = name_vacancy.strip(' </i>!@#`*&^?/')
         self.url_vacancy = url_vacancy
         self.requirement = requirement
         self.salary = salary
+        self.city = city
 
     def __repr__(self):
-        return f"Вакансия {self.name_vacancy} с зарплатой от {self.salary} руб. находится по адресу: " \
+        return f"Вакансия {self.name_vacancy} в городе {self.city} с зарплатой от {self.salary} руб. находится по адресу: " \
                f"{self.url_vacancy}. Требования/Описание вакансии: {self.requirement}"
 
 class CountMixin:
-    def __init__(self, data):
-        self.data = data
+    def __init__(self):
+        self.data = get_hh_vacancy()
 
-    def get_vacancy(self):
-        with open("vacancy.json", "w") as f:
-            json.dump(self.data, f, indent=4)
-
+    def get_hh_vacancy(self):
+        with open("hhvacancy.json", "r") as f:
+            data = json.load(f)
     @property
     def get_count_of_vacancy(self):
         """
         Вернуть количество вакансий от текущего сервиса.
         Получать количество необходимо динамически из файла.
         """
-        with open("f1.json", 'r') as f:
+        with open("hhvacancy.json", 'r') as f:
             data = json.load(f)
-        return data
+        return len(data)
 
 class Connector:
     """
@@ -148,31 +152,45 @@ class Connector:
     """
     __data_file = None
 
+    def __init__(self, file_path: str):
+        self.__data_file = file_path
+
+
     @property
     def data_file(self):
-        pass
+        return self.__data_file
 
     @data_file.setter
     def data_file(self, value):
-        # тут должен быть код для установки файла
-        self.__connect()
+        self.__data_file = value
 
-    def __connect(self):
+    def connect(self):
         """
-        Проверка на существование файла с данными и
-        создание его при необходимости
-        Также проверить на деградацию и возбудить исключение
-        если файл потерял актуальность в структуре данных
+        Проверяет, что файл существует, если нет то выбрасывает исключение. Возвращает переменную с данными
         """
-        pass
+        if not os.path.isfile(self.__data_file):
+            raise FileNotFoundError(f"Файл {self.__data_file} отсутствует")
+        try:
+            with open(self.__data_file, 'r', encoding='UTF-8') as file:
+                json_reader = json.load(file)
+                for i in json_reader:
+                    # print(i)
+                    if i.get('name') == 0:
+                        print('Something wrong')
+                    else:
+                        return json_reader
+                return json_reader
+        except Exception:
+            print(f'Файл {self.__data_file} поврежден')
 
     def insert(self, data):
         """
         Запись данных в файл с сохранением структуры и исходных данных
         """
-        pass
+        with open(f"{self.__data_file}", 'w+', encoding="UTF-8") as file:
+            json.dump(data, file, indent=2, ensure_ascii=False)
 
-    def select(self, request):
+    def select(self, query):
         """
         Выбор данных из файла с применением фильтрации
         query содержит словарь, в котором ключ это поле для
@@ -180,31 +198,6 @@ class Connector:
         {'price': 1000}, должно отфильтровать данные по полю price
         и вернуть все строки, в которых цена 1000
         """
-        for key, value in request['items'][i].items():
-            while i < len(request['items']):
-                try: id = request['items'][i]["id"]
-                except: id = None
-                try: name = request['items'][i]["name"]
-                except: name = None
-                try: url = request['items'][i]["alternate_url"]
-                except: url = None
-                try: requirement = request['items'][i]["snippet"]['requirement']
-                except: requirement = None
-                try: salary = request['items'][i]["salary"]['from']
-                except: salary = None
-                try: apply_alternate_url = request['items'][i]["apply_alternate_url"]
-                except: apply_alternate_url = None
-                i = i + 1
-                if name != None and requirement != None and salary != None and url != None:
-
-                    dict_request = collections.Counter(name=name, requirement=requirement, salary=salary, vacancy_url=url,
-                             response_vacancy=apply_alternate_url)
-                    # list_request.append(dict(name=name, requirement=requirement, salary=salary, vacancy_url=url,
-                    #          response_vacancy=apply_alternate_url))
-                    # print(len(dict_request))
-                    with open("f3.json", "a") as f:
-                        json.dump(dict_request, f, indent=4)
-                    return dict_request
         pass
 
     def delete(self, query):
@@ -215,16 +208,20 @@ class Connector:
         """
         pass
 
+
 if __name__ == '__main__':
     # req_ = HH("python")
     # vac1 = Superjob('python')
     # print(vac1.get_request())
-    req_1 = HHVacancy("python")
+    # req_1 = HHVacancy("python")
     # print(req_1.get_vacancy)
     # vac_1 = CountMixin(req_.get_request())
     # req_2 = Superjob('python')
-    req_2 = SJVacancy("python")
+    # req_2 = SJVacancy("python")
     # print(req_2.get_vacancy)
     # print(req_2.get_info())
-    req_1.to_json()
-    req_2.to_json()
+    # req_1.to_json()
+    # req_2.to_json()
+    # con = Connector('hhvacancy.json')
+    # print(con.connect())
+    mix = CountMixin()
