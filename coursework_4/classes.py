@@ -2,6 +2,8 @@ import collections
 import json
 from abc import ABC, abstractmethod
 import os
+from functools import reduce
+
 import requests
 
 
@@ -19,6 +21,7 @@ class Engine(ABC):
 
 class HH(Engine):
     """Возвращает 1000 вакансий с сайта HeadHunter"""
+
     def __init__(self, data: str):
         """Инициализирует класс где data - название по которому будет происходить поиск"""
         self.data = data
@@ -39,6 +42,8 @@ class HH(Engine):
 
 
 class Superjob(Engine):
+    """Возвращает вакансии с сайта SuperJob"""
+
     def __init__(self, data: str):
         """Инициализирует класс где data - название по которому будет происходить поиск"""
         self.data = data
@@ -56,6 +61,7 @@ class Superjob(Engine):
 
 class HHVacancy(HH):
     """ HeadHunter Vacancy """
+
     @property
     def get_vacancy(self):
         """Взяли все ранее найденные вакансии с HeadHunter и записали их в переменную с полями: наименование вакансии,
@@ -67,10 +73,10 @@ class HHVacancy(HH):
                 'name': self.request[i]['name'],
                 'city': None if self.request[i]['address'] == None else self.request[i]['address']['city'],
                 'salary': {
-                        'from': None if self.request[i]['salary'] == 0 else f"{self.request[i]['salary']['from']} "
-                                                                            f"{self.request[i]['salary']['currency']}",
-                        'to': None if self.request[i]['salary'] == 0 else f"{self.request[i]['salary']['to']} "
-                                                                            f"{self.request[i]['salary']['currency']}",
+                    'from': None if self.request[i]['salary'] == 0 else f"{self.request[i]['salary']['from']} "
+                                                                        f"{self.request[i]['salary']['currency']}",
+                    'to': None if self.request[i]['salary'] == 0 else f"{self.request[i]['salary']['to']} "
+                                                                      f"{self.request[i]['salary']['currency']}",
                 },
                 "requirement": self.request[i]['snippet']['requirement'],
                 'url': self.request[i]['alternate_url'],
@@ -85,6 +91,7 @@ class HHVacancy(HH):
 
 class SJVacancy(Superjob):
     """ SuperJob Vacancy """
+
     @property
     def get_vacancy(self):
         """Взяли все ранее найденные вакансии с SuperJob и записали их в переменную с полями: наименование вакансии,
@@ -97,9 +104,9 @@ class SJVacancy(Superjob):
                 'city': None if self.request[i]['town'] == None else self.request[i]['town']['title'],
                 'salary': {
                     'from': None if self.request[i]['payment_from'] == 0 else f"{self.request[i]['payment_from']} "
-                                                                                f"{None if self.request[i]['currency'] ==0 else self.request[i]['currency']}",
+                                                                              f"{None if self.request[i]['currency'] == 0 else self.request[i]['currency']}",
                     'to': None if self.request[i]['payment_to'] == 0 else f"{self.request[i]['payment_to']} "
-                                                                                f"{None if self.request[i]['currency'] ==0 else self.request[i]['currency']}",
+                                                                          f"{None if self.request[i]['currency'] == 0 else self.request[i]['currency']}",
                 },
                 "requirement": self.request[i]['candidat'],
                 'url': self.request[i]['link'],
@@ -112,37 +119,31 @@ class SJVacancy(Superjob):
             json.dump(self.get_vacancy, f, indent=2)
 
 
-class Vacancy(HHVacancy, SJVacancy): #я предполагала, что в этот класс надо собрать все вакансии от обоих сайтов
-    __slots__ = ("source", "name_vacancy", "city", "salary", "requirement", "url_vacancy")
+class Vacancy(HHVacancy, SJVacancy):
+    """Собирает все найденные ранее вакансии в один json файл"""
 
-    def __init__(self, name_vacancy=None, city=None, url_vacancy=None, requirement=None, salary=0):
-        super().__init__(data)
-        self.name_vacancy = name_vacancy.strip(' </i>!@#`*&^?/')
-        self.url_vacancy = url_vacancy
-        self.requirement = requirement
-        self.salary = salary
-        self.city = city
+    def combine_json(self):
+        a = json.loads(open('hhvacancy.json').read())
+        b = json.loads(open('sjvacancy.json').read())
+        c = a + b
+        with open('all_vacancy.json', 'w') as f:
+            json.dump(c, f, indent=2)
 
-    def __repr__(self):
-        return f"Вакансия {self.name_vacancy} в городе {self.city} с зарплатой от {self.salary} руб. находится по адресу: " \
-               f"{self.url_vacancy}. Требования/Описание вакансии: {self.requirement}"
 
 class CountMixin:
-    def __init__(self):
-        self.data = get_hh_vacancy()
+    """Подсчитывает количество вакансий от указанного сервиса """
+    def __init__(self, data: str):
+        self.data = data
 
-    def get_hh_vacancy(self):
-        with open("hhvacancy.json", "r") as f:
-            data = json.load(f)
     @property
     def get_count_of_vacancy(self):
-        """
-        Вернуть количество вакансий от текущего сервиса.
-        Получать количество необходимо динамически из файла.
-        """
-        with open("hhvacancy.json", 'r') as f:
-            data = json.load(f)
-        return len(data)
+        try:
+            with open(f'{self.data}', 'r') as f:
+                data = json.load(f)
+                return len(data)
+        except FileNotFoundError:
+            print("FileNotFoundError")
+
 
 class Connector:
     """
@@ -155,13 +156,12 @@ class Connector:
     def __init__(self, file_path: str):
         self.__data_file = file_path
 
-
     @property
     def data_file(self):
         return self.__data_file
 
     @data_file.setter
-    def data_file(self, value):
+    def data_file(self, value: str):
         self.__data_file = value
 
     def connect(self):
@@ -174,7 +174,6 @@ class Connector:
             with open(self.__data_file, 'r', encoding='UTF-8') as file:
                 json_reader = json.load(file)
                 for i in json_reader:
-                    # print(i)
                     if i.get('name') == 0:
                         print('Something wrong')
                     else:
@@ -183,7 +182,7 @@ class Connector:
         except Exception:
             print(f'Файл {self.__data_file} поврежден')
 
-    def insert(self, data):
+    def insert(self, data: str):
         """
         Запись данных в файл с сохранением структуры и исходных данных
         """
