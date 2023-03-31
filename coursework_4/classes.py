@@ -52,7 +52,7 @@ class Superjob(Engine):
     def get_request(self):
         """Возвращает вакансии с сайта SuperJob"""
         url = "https://api.superjob.ru/2.0/vacancies/"
-        params = {'keyword': self.data, "count": 1000}
+        params = {'keyword': self.data, "count": 100}
         my_auth_data = {"X-Api-App-Id": os.environ['SuperJob_api_key']}
         response = requests.get(url, headers=my_auth_data, params=params)
         vacancies = response.json()['objects']
@@ -72,12 +72,10 @@ class HHVacancy(HH):
                 'source': 'HeadHunter',
                 'name': self.request[i]['name'],
                 'city': None if self.request[i]['address'] == None else self.request[i]['address']['city'],
-                'salary': {
-                    'from': None if self.request[i]['salary'] == 0 else f"{self.request[i]['salary']['from']} "
-                                                                        f"{self.request[i]['salary']['currency']}",
-                    'to': None if self.request[i]['salary'] == 0 else f"{self.request[i]['salary']['to']} "
-                                                                      f"{self.request[i]['salary']['currency']}",
-                },
+                'salary_from': 0 if self.request[i]['salary'] == 0 else self.request[i]['salary']['from'],
+                                                                        # f"{self.request[i]['salary']['currency']}",
+                'salary_to': 0 if self.request[i]['salary'] == 0 else self.request[i]['salary']['to'],
+                                                                      # f"{self.request[i]['salary']['currency']}",
                 "requirement": self.request[i]['snippet']['requirement'],
                 'url': self.request[i]['alternate_url'],
             }
@@ -102,12 +100,10 @@ class SJVacancy(Superjob):
                 'source': 'SuperJob',
                 'name': self.request[i]['profession'],
                 'city': None if self.request[i]['town'] == None else self.request[i]['town']['title'],
-                'salary': {
-                    'from': None if self.request[i]['payment_from'] == 0 else f"{self.request[i]['payment_from']} "
-                                                                              f"{None if self.request[i]['currency'] == 0 else self.request[i]['currency']}",
-                    'to': None if self.request[i]['payment_to'] == 0 else f"{self.request[i]['payment_to']} "
-                                                                          f"{None if self.request[i]['currency'] == 0 else self.request[i]['currency']}",
-                },
+                'salary_from': 0 if self.request[i]['payment_from'] == 0 else self.request[i]['payment_from'],
+                                                                              # f"{None if self.request[i]['currency'] == 0 else self.request[i]['currency']}",
+                'salary_to': 0 if self.request[i]['payment_to'] == 0 else self.request[i]['payment_to'],
+                                                                          # f"{None if self.request[i]['currency'] == 0 else self.request[i]['currency']}",
                 "requirement": self.request[i]['candidat'],
                 'url': self.request[i]['link'],
             }
@@ -166,7 +162,8 @@ class Connector:
 
     def connect(self):
         """
-        Проверяет, что файл существует, если нет то выбрасывает исключение. Возвращает переменную с данными
+        Проверяет, что файл существует, если нет то выбрасывает исключение.
+        Возвращает переменную с данными
         """
         if not os.path.isfile(self.__data_file):
             raise FileNotFoundError(f"Файл {self.__data_file} отсутствует")
@@ -189,15 +186,33 @@ class Connector:
         with open(f"{self.__data_file}", 'w+', encoding="UTF-8") as file:
             json.dump(data, file, indent=2, ensure_ascii=False)
 
-    def select(self, query):
-        """
-        Выбор данных из файла с применением фильтрации
-        query содержит словарь, в котором ключ это поле для
-        фильтрации, а значение это искомое значение, например:
-        {'price': 1000}, должно отфильтровать данные по полю price
-        и вернуть все строки, в которых цена 1000
-        """
-        pass
+    # @staticmethod
+    # def select(self, query: dict) -> list:
+    #     result = []
+    #     with open(self.data_file) as f:
+    #         data = json.load(f)
+    #     if not query:
+    #         return data
+    #     for item in data:
+    #         if all(item.get(key) == value for key, value in query.items()):
+    #             result.append(item)
+    #     return result
+        #
+        # """
+        # Выбор данных из файла с применением фильтрации
+        # query содержит словарь, в котором ключ это поле для
+        # фильтрации, а значение это искомое значение, например:
+        # {'price': 1000}, должно отфильтровать данные по полю price
+        # и вернуть все строки, в которых цена 1000
+        # """
+    def sort_salary(self):
+        sorted_obj = {}
+        with open(self.__data_file, 'r', encoding='UTF-8') as f:
+            file = json.load(f)
+            for item in range(len(file)):
+                sorted_obj['salary_from'] = sorted(file[item]['salary_from'], key=lambda x: x['salary_from'], reverse=True)
+            return file
+
 
     def delete(self, query):
         """
@@ -223,4 +238,5 @@ if __name__ == '__main__':
     # req_2.to_json()
     # con = Connector('hhvacancy.json')
     # print(con.connect())
-    mix = CountMixin()
+    mix = CountMixin('hhvacancy.json')
+    # print(mix.get_count_of_vacancy)
