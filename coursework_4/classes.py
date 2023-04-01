@@ -1,9 +1,7 @@
-import collections
+from collections import OrderedDict
 import json
 from abc import ABC, abstractmethod
 import os
-from functools import reduce
-
 import requests
 
 
@@ -29,16 +27,26 @@ class HH(Engine):
 
     def get_request(self):
         """Возвращает 1000 вакансий с сайта HeadHunter"""
-        vacancies = []
-        for page in range(1, 11):
-            params = {
-                "text": f"{self.data}",
-                "area": 113,
-                "page": page,
-                "per_page": 1,
-            }
-            vacancies.extend(requests.get('https://api.hh.ru/vacancies', params=params).json()["items"])
-        return vacancies
+        try:
+            vacancies = []
+            for page in range(1, 11):
+                params = {
+                    "text": f"{self.data}",
+                    "area": 113,
+                    "page": page,
+                    "per_page": 1,
+                }
+                vacancies.extend(requests.get('https://api.hh.ru/vacancies', params=params).json()["items"])
+            return vacancies
+        except requests.exceptions.ConnectTimeout:
+            print('Oops. Connection timeout occured!')
+        except requests.exceptions.ReadTimeout:
+            print('Oops. Read timeout occured')
+        except requests.exceptions.ConnectionError:
+            print('Seems like dns lookup failed..')
+        except requests.exceptions.HTTPError as err:
+            print('Oops. HTTP Error occured')
+            print('Response is: {content}'.format(content=err.response.content))
 
 
 class Superjob(Engine):
@@ -52,7 +60,7 @@ class Superjob(Engine):
     def get_request(self):
         """Возвращает вакансии с сайта SuperJob"""
         url = "https://api.superjob.ru/2.0/vacancies/"
-        params = {'keyword': self.data, "count": 100}
+        params = {'keyword': self.data, "count": 1000}
         my_auth_data = {"X-Api-App-Id": os.environ['SuperJob_api_key']}
         response = requests.get(url, headers=my_auth_data, params=params)
         vacancies = response.json()['objects']
@@ -66,21 +74,29 @@ class HHVacancy(HH):
     def get_vacancy(self):
         """Взяли все ранее найденные вакансии с HeadHunter и записали их в переменную с полями: наименование вакансии,
         город, зарплатная вилка, описание требований и url вакансии"""
+
         list_vacancy = []
         for i in range(len(self.request)):
+            if self.request[i]['snippet']['requirement'] is not None:
+                s = self.request[i]['snippet']['requirement']
+                for x, y in ("<highlighttext>", ""), ("</highlighttext>", ""):
+                    s = s.replace(x, y)
             info = {
                 'source': 'HeadHunter',
                 'name': self.request[i]['name'],
-                'city': None if self.request[i]['address'] == None else self.request[i]['address']['city'],
-                'salary_from': 0 if self.request[i]['salary'] == 0 else self.request[i]['salary']['from'],
-                                                                        # f"{self.request[i]['salary']['currency']}",
-                'salary_to': 0 if self.request[i]['salary'] == 0 else self.request[i]['salary']['to'],
-                                                                      # f"{self.request[i]['salary']['currency']}",
-                "requirement": self.request[i]['snippet']['requirement'],
+                'city': "(Город не указан)" if (self.request[i]['address']) == None else self.request[i]['address']['city'],
+                'salary_from': 0.0 if (self.request[i]['salary'] == None or self.request[i]['salary']['from'] == 0 or
+                                       self.request[i]['salary']['from'] == None) else self.request[i]['salary']['from'],
+                'salary_to': "(Предельная зарплата не указана)" if (self.request[i]['salary'] == None or
+                             self.request[i]['salary']['to'] == None) else self.request[i]['salary']['to'],
+                'currency': "(Валюта не указана)" if self.request[i]['salary'] == None else f"{self.request[i]['salary']['currency']}",
                 'url': self.request[i]['alternate_url'],
+                "requirement": s,
             }
             list_vacancy.append(info)
         return list_vacancy
+
+
 
     def to_json(self):
         with open('hhvacancy.json', 'w') as f:
@@ -94,21 +110,26 @@ class SJVacancy(Superjob):
     def get_vacancy(self):
         """Взяли все ранее найденные вакансии с SuperJob и записали их в переменную с полями: наименование вакансии,
         город, зарплатная вилка, описание требований и url вакансии"""
-        list_vacancy = []
-        for i in range(len(self.request)):
-            info = {
-                'source': 'SuperJob',
-                'name': self.request[i]['profession'],
-                'city': None if self.request[i]['town'] == None else self.request[i]['town']['title'],
-                'salary_from': 0 if self.request[i]['payment_from'] == 0 else self.request[i]['payment_from'],
-                                                                              # f"{None if self.request[i]['currency'] == 0 else self.request[i]['currency']}",
-                'salary_to': 0 if self.request[i]['payment_to'] == 0 else self.request[i]['payment_to'],
-                                                                          # f"{None if self.request[i]['currency'] == 0 else self.request[i]['currency']}",
-                "requirement": self.request[i]['candidat'],
-                'url': self.request[i]['link'],
-            }
-            list_vacancy.append(info)
-        return list_vacancy
+        try:
+            list_vacancy = []
+            for i in range(len(self.request)):
+                info = {
+                    'source': 'SuperJob',
+                    'name': self.request[i]['profession'],
+                    'city': "(Город не указан)" if self.request[i]['town'] == None else self.request[i]['town']['title'],
+                    'salary_from': 0.0 if self.request[i]['payment_from'] == 0 else self.request[i]['payment_from'],
+                    'salary_to': "(Предельная зарплата не указана)" if (self.request[i]['payment_to'] == 0 or self.request[i]['payment_to'] ==
+                                                  None) else self.request[i]['payment_to'],
+                    'currency': "(Валюта не указана)" if self.request[i]['currency'] == None else self.request[i]['currency'],
+                    "requirement": self.request[i]['candidat'],
+                    'url': self.request[i]['link'],
+                }
+                list_vacancy.append(info)
+            return list_vacancy
+        except Exception:
+            print("Error")
+        else:
+            print("Выполняем поиск на сайте SuperJob")
 
     def to_json(self):
         with open('sjvacancy.json', 'w') as f:
@@ -186,54 +207,9 @@ class Connector:
         with open(f"{self.__data_file}", 'w+', encoding="UTF-8") as file:
             json.dump(data, file, indent=2, ensure_ascii=False)
 
-    # @staticmethod
-    # def select(self, query: dict) -> list:
-    #     result = []
-    #     with open(self.data_file) as f:
-    #         data = json.load(f)
-    #     if not query:
-    #         return data
-    #     for item in data:
-    #         if all(item.get(key) == value for key, value in query.items()):
-    #             result.append(item)
-    #     return result
-        #
-        # """
-        # Выбор данных из файла с применением фильтрации
-        # query содержит словарь, в котором ключ это поле для
-        # фильтрации, а значение это искомое значение, например:
-        # {'price': 1000}, должно отфильтровать данные по полю price
-        # и вернуть все строки, в которых цена 1000
-        # """
     def sort_salary(self):
         with open(self.__data_file, 'r', encoding='UTF-8') as f:
             data = json.load(f)
         sorted_data = sorted(data, key=lambda x: x["salary_from"], reverse=True)
         return sorted_data
 
-    def delete(self, query):
-        """
-        Удаление записей из файла, которые соответствуют запрос,
-        как в методе select. Если в query передан пустой словарь, то
-        функция удаления не сработает
-        """
-        pass
-
-
-if __name__ == '__main__':
-    # req_ = HH("python")
-    # vac1 = Superjob('python')
-    # print(vac1.get_request())
-    # req_1 = HHVacancy("python")
-    # print(req_1.get_vacancy)
-    # vac_1 = CountMixin(req_.get_request())
-    # req_2 = Superjob('python')
-    # req_2 = SJVacancy("python")
-    # print(req_2.get_vacancy)
-    # print(req_2.get_info())
-    # req_1.to_json()
-    # req_2.to_json()
-    # con = Connector('hhvacancy.json')
-    # print(con.connect())
-    mix = CountMixin('hhvacancy.json')
-    # print(mix.get_count_of_vacancy)
