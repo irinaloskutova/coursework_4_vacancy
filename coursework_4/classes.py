@@ -206,13 +206,10 @@ class Connector:
         # и вернуть все строки, в которых цена 1000
         # """
     def sort_salary(self):
-        sorted_obj = {}
         with open(self.__data_file, 'r', encoding='UTF-8') as f:
-            file = json.load(f)
-            for item in range(len(file)):
-                sorted_obj['salary_from'] = sorted(file[item]['salary_from'], key=lambda x: x['salary_from'], reverse=True)
-            return file
-
+            data = json.load(f)
+        sorted_data = sorted(data, key=lambda x: x["salary_from"], reverse=True)
+        return sorted_data
 
     def delete(self, query):
         """
