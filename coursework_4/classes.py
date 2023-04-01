@@ -1,4 +1,3 @@
-from collections import OrderedDict
 import json
 from abc import ABC, abstractmethod
 import os
@@ -34,7 +33,7 @@ class HH(Engine):
                     "text": f"{self.data}",
                     "area": 113,
                     "page": page,
-                    "per_page": 1,
+                    "per_page": 100,
                 }
                 vacancies.extend(requests.get('https://api.hh.ru/vacancies', params=params).json()["items"])
             return vacancies
