@@ -136,14 +136,37 @@ class SJVacancy(Superjob):
 
 
 class Vacancy(HHVacancy, SJVacancy):
-    """Собирает все найденные ранее вакансии в один json файл"""
-
-    def combine_json(self):
+    @staticmethod
+    def combine_json():
+        """Собирает все найденные ранее вакансии в один json файл"""
         a = json.loads(open('hhvacancy.json').read())
         b = json.loads(open('sjvacancy.json').read())
         c = a + b
         with open('all_vacancy.json', 'w') as f:
             json.dump(c, f, indent=2)
+
+
+class Vacancy_list:
+    __slots__ = ('source', 'vacancy_name', 'url', 'city', 'requirement', 'currency', 'salary_from', 'salary_to')
+
+    def __init__(self, source, vacancy_name, url, city, requirement, currency, salary_from, salary_to):
+        self.source = source
+        self.vacancy_name = vacancy_name
+        self.url = url
+        self.city = city
+        self.requirement = requirement
+        self.currency = currency
+        self.salary_from = salary_from
+        self.salary_to = salary_to
+
+    def __str__(self):
+        return (f"\nНа сайте: {self.source} мы нашли вакансию: {self.vacancy_name} \nс зарплатой от "
+                f"{self.salary_from} "
+                f"{self.currency}"
+                f" до {self.salary_to} {self.currency}.\n"
+                f"В городе {self.city if not None else 'город не указан'}. \n"
+                f"Требования/описание вакансии: {self.requirement} \n"
+                f"Вакансия находится по ссылке: {self.url} \n")
 
 
 class CountMixin:
@@ -212,3 +235,5 @@ class Connector:
         sorted_data = sorted(data, key=lambda x: x["salary_from"], reverse=True)
         return sorted_data
 
+# if __name__ == '__main__':
+    # u = Vacancy(data_1='python')

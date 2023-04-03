@@ -36,17 +36,19 @@ def main():
                           f"меньше {count_vacancy}: ")
                     continue
                 else:
-                    u = con.sort_salary()
+                    sorted_vacancy = con.sort_salary()
+                    items = []
                     for i in range(int(count)):
-                        print(f"\nНа сайте: {u[i]['source']} мы нашли вакансию: {u[i]['name']} \nс зарплатой от {u[i]['salary_from']} "
-                              f"{u[i]['currency']}"
-                              f" до {u[i]['salary_to']} {u[i]['currency']}.\n"
-                              f"В городе {u[i]['city'] if not None else 'город не указан'}. \n"
-                              f"Требования/описание вакансии: {u[i]['requirement']} \n"
-                              f"Вакансия находится по ссылке: {u[i]['url']} \n")
+                        vac = Vacancy_list(sorted_vacancy[i]['source'], sorted_vacancy[i]['name'], sorted_vacancy[i]['url'],
+                                      sorted_vacancy[i]['city'], sorted_vacancy[i]['requirement'], sorted_vacancy[i]['currency'],
+                                      sorted_vacancy[i]['salary_from'], sorted_vacancy[i]['salary_to'])
+                        items.append(vac)
+                        print(vac)
                     break
+
         print('Спасибо, что воспользовались нашим поиском. \nВозвращайтесь в любое время.')
         break
+
 
 if __name__ == '__main__':
     main()
